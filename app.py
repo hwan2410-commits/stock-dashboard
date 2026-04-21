@@ -70,7 +70,7 @@ def load_us_movers(n):
 def load_news():
     return fetch_news(5)
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)
 def load_kr_chart(ticker, days):
     return get_stock_detail(ticker, days)
 
