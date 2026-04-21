@@ -71,8 +71,8 @@ def load_news():
     return fetch_news(5)
 
 @st.cache_data(ttl=3600)
-def load_kr_chart(ticker):
-    return get_stock_detail(ticker)
+def load_kr_chart(ticker, days):
+    return get_stock_detail(ticker, days)
 
 @st.cache_data(ttl=3600)
 def load_us_chart(ticker, period):
@@ -202,10 +202,13 @@ elif menu == "🇰🇷 한국 주식":
 
     with tab3:
         st.markdown("#### 종목 차트 조회")
-        ticker_input = st.text_input("종목 코드 입력 (예: 005930 = 삼성전자)", "005930")
+        c1, c2 = st.columns([3, 1])
+        ticker_input = c1.text_input("종목 코드 입력 (예: 005930 = 삼성전자)", "005930")
+        period_map = {"1개월": 30, "3개월": 90, "6개월": 180, "1년": 365, "2년": 730}
+        period_label = c2.selectbox("기간", list(period_map.keys()), index=1)
         if ticker_input:
             with st.spinner("차트 로딩 중..."):
-                df = load_kr_chart(ticker_input)
+                df = load_kr_chart(ticker_input, period_map[period_label])
             name = get_ticker_name(ticker_input)
             render_candlestick(df, f"{name} ({ticker_input}) 캔들차트")
 

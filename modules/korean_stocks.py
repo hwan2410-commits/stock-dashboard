@@ -25,11 +25,10 @@ def get_market_movers(market="KOSPI", top_n=10):
         return pd.DataFrame(), pd.DataFrame()
 
 
-def get_stock_detail(ticker: str):
-    """개별 종목 OHLCV (90일)"""
+def get_stock_detail(ticker: str, days: int = 90):
     try:
         end = datetime.now()
-        start = end - timedelta(days=90)
+        start = end - timedelta(days=days)
         df = fdr.DataReader(ticker, start.strftime("%Y-%m-%d"))
         return df  # columns: Open, High, Low, Close, Volume, Change
     except Exception:
