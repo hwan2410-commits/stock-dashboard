@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import yfinance as yf
 import FinanceDataReader as fdr
 from modules.korean_stocks import get_market_movers, get_stock_detail, get_ticker_name
@@ -37,7 +37,7 @@ st.markdown("""
 # ── 사이드바 ──────────────────────────────────────────────
 with st.sidebar:
     st.title("📈 글로벌 주식 대시보드")
-    st.caption(f"업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    st.caption(f"업데이트: {datetime.now(timezone(timedelta(hours=9))).strftime('%Y-%m-%d %H:%M')} KST")
     st.divider()
 
     menu = st.radio(
