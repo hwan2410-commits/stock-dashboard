@@ -94,21 +94,13 @@ def render_movers_table(gainers: pd.DataFrame, losers: pd.DataFrame, col_price="
         if gainers.empty:
             st.info("데이터를 불러오는 중...")
         else:
-            st.dataframe(
-                gainers.style.background_gradient(subset=[col_change], cmap="Reds"),
-                use_container_width=True,
-                hide_index=True,
-            )
+            st.dataframe(gainers, use_container_width=True, hide_index=True)
     with c2:
         st.markdown("#### 🔵 하락 TOP")
         if losers.empty:
             st.info("데이터를 불러오는 중...")
         else:
-            st.dataframe(
-                losers.style.background_gradient(subset=[col_change], cmap="Blues_r"),
-                use_container_width=True,
-                hide_index=True,
-            )
+            st.dataframe(losers, use_container_width=True, hide_index=True)
 
 
 def render_candlestick(df: pd.DataFrame, title: str):
