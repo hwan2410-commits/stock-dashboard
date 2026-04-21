@@ -2,6 +2,27 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 
+# 티커 → 한국어 회사명 매핑
+TICKER_NAMES = {
+    "AAPL": "애플", "MSFT": "마이크로소프트", "NVDA": "엔비디아", "AMZN": "아마존",
+    "GOOGL": "구글", "META": "메타", "TSLA": "테슬라", "AVGO": "브로드컴",
+    "BRK-B": "버크셔해서웨이", "JPM": "JP모건", "LLY": "일라이릴리", "V": "비자",
+    "UNH": "유나이티드헬스", "XOM": "엑슨모빌", "MA": "마스터카드", "JNJ": "존슨앤존슨",
+    "PG": "P&G", "HD": "홈디포", "COST": "코스트코", "ABBV": "애브비",
+    "MRK": "머크", "WMT": "월마트", "CVX": "쉐브론", "BAC": "뱅크오브아메리카",
+    "KO": "코카콜라", "PEP": "펩시코", "NFLX": "넷플릭스", "CRM": "세일즈포스",
+    "AMD": "AMD", "ORCL": "오라클", "MCD": "맥도날드", "CSCO": "시스코",
+    "NKE": "나이키", "IBM": "IBM", "QCOM": "퀄컴", "GE": "GE",
+    "CAT": "캐터필러", "SBUX": "스타벅스", "GS": "골드만삭스", "MS": "모건스탠리",
+    "PYPL": "페이팔", "UBER": "우버", "ABNB": "에어비앤비", "SNAP": "스냅",
+    "RIVN": "리비안", "PLTR": "팔란티어", "SOFI": "소파이", "COIN": "코인베이스",
+    "HOOD": "로빈후드", "SPY": "S&P500 ETF", "QQQ": "나스닥100 ETF",
+    "GLD": "금 ETF", "MRNA": "모더나", "PFE": "화이자", "BNTX": "바이오엔텍",
+    "TSM": "TSMC", "ASML": "ASML", "TM": "토요타", "SONY": "소니",
+    "BABA": "알리바바", "JD": "징동닷컴", "PDD": "핀둬둬", "BIDU": "바이두",
+    "NIO": "니오", "XPEV": "샤오펑", "LI": "리오토",
+}
+
 # S&P 500 주요 종목 (대표 200개)
 SP500_TICKERS = [
     "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","AVGO","BRK-B","JPM",
@@ -51,9 +72,11 @@ def get_us_movers(top_n=10):
             "거래량": volume.values,
         }).dropna()
 
+        result["회사명"] = result["티커"].map(lambda t: TICKER_NAMES.get(t, t))
         result = result[result["현재가"] > 0]
-        gainers = result.nlargest(top_n, "등락률").reset_index(drop=True)
-        losers = result.nsmallest(top_n, "등락률").reset_index(drop=True)
+        cols = ["티커", "회사명", "현재가", "등락률", "거래량"]
+        gainers = result.nlargest(top_n, "등락률")[cols].reset_index(drop=True)
+        losers = result.nsmallest(top_n, "등락률")[cols].reset_index(drop=True)
 
         return gainers, losers
     except Exception as e:

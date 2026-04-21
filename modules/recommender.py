@@ -4,6 +4,7 @@ import yfinance as yf
 import FinanceDataReader as fdr
 from datetime import datetime, timedelta
 import ta
+from modules.us_stocks import TICKER_NAMES
 
 
 def _flatten_yf(df: pd.DataFrame) -> pd.DataFrame:
@@ -139,6 +140,7 @@ def get_us_recommendations(tickers: list) -> pd.DataFrame:
             signals = compute_signals(df_ticker)
             if signals and signals["점수"] >= 2:
                 signals["티커"] = ticker
+                signals["회사명"] = TICKER_NAMES.get(ticker, ticker)
                 results.append(signals)
         except:
             continue
@@ -146,5 +148,5 @@ def get_us_recommendations(tickers: list) -> pd.DataFrame:
     if not results:
         return pd.DataFrame()
 
-    df_result = pd.DataFrame(results)[["티커", "신호", "점수", "RSI", "현재가", "20일선", "이유"]]
+    df_result = pd.DataFrame(results)[["티커", "회사명", "신호", "점수", "RSI", "현재가", "20일선", "이유"]]
     return df_result.sort_values("점수", ascending=False).reset_index(drop=True)
