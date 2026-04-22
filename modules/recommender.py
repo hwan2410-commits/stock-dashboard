@@ -237,13 +237,13 @@ def get_kr_recommendations(tickers: list, names: dict) -> pd.DataFrame:
     results = []
     start = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
 
-    for ticker in tickers[:30]:
+    for ticker in tickers[:80]:
         try:
             df = fdr.DataReader(ticker, start)
             if df.empty or len(df) < 30:
                 continue
             signals = compute_signals(df)
-            if signals and signals["점수"] >= 3:
+            if signals and signals["점수"] >= 1:
                 signals["종목명"] = names.get(ticker, ticker)
                 signals["티커"] = ticker
                 results.append(signals)
@@ -260,9 +260,11 @@ def get_kr_recommendations(tickers: list, names: dict) -> pd.DataFrame:
 
 def get_us_recommendations(tickers: list) -> pd.DataFrame:
     """미국 주식 추천 목록 (배치 다운로드, 점수 4이상)"""
-    watch_list = tickers[:20] if tickers else [
+    watch_list = list(tickers[:50]) if tickers else [
         "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA",
-        "AMD", "INTC", "NFLX", "PYPL", "UBER", "CRM", "ORCL", "ADBE"
+        "AMD", "INTC", "NFLX", "PYPL", "UBER", "CRM", "ORCL", "ADBE",
+        "COIN", "PLTR", "SOFI", "RIVN", "SHOP", "SNOW", "RBLX", "HOOD",
+        "ABNB", "DASH", "LYFT", "SNAP", "PINS", "TWLO", "DDOG",
     ]
 
     try:
@@ -279,7 +281,7 @@ def get_us_recommendations(tickers: list) -> pd.DataFrame:
                 continue
             df_ticker = _flatten_yf(df_ticker).dropna(subset=["Close"])
             signals = compute_signals(df_ticker)
-            if signals and signals["점수"] >= 4:
+            if signals and signals["점수"] >= 1:
                 signals["티커"] = ticker
                 signals["회사명"] = TICKER_NAMES.get(ticker, ticker)
                 results.append(signals)
