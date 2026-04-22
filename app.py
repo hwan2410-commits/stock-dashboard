@@ -9,7 +9,7 @@ from modules.korean_stocks import get_market_movers, get_stock_detail, get_ticke
 from modules.us_stocks import get_us_movers, get_stock_history
 from modules.recommender import get_kr_recommendations, get_us_recommendations, compute_signals
 from modules.news_fetcher import fetch_news
-from modules.otc_stocks import get_kotc_movers, get_kotc_listings, get_kotc_stock_history, search_kotc_stock, get_kotc_summary
+from modules.otc_stocks import get_kotc_movers, get_kotc_listings, get_kotc_stock_history, search_kotc_stock, get_kotc_summary  # noqa: F401
 
 st.set_page_config(
     page_title="글로벌 주식 대시보드",
@@ -96,8 +96,8 @@ def load_kotc_listings():
     return get_kotc_listings()
 
 @st.cache_data(ttl=600)
-def load_kotc_history(code, days):
-    return get_kotc_stock_history(code, days)
+def load_kotc_history(short_cd, days):
+    return get_kotc_stock_history(short_cd, days)
 
 @st.cache_data(ttl=600)
 def load_kotc_summary():
@@ -296,16 +296,16 @@ elif menu == "🏦 장외거래 (K-OTC)":
         if summary:
             m_cols = st.columns(4)
             m_cols[0].metric("전체 종목수", f"{summary.get('종목수', '-')}개")
-            m_cols[1].metric("상승", f"{summary.get('상승', '-')}종목", delta=str(summary.get('상승', '')))
-            m_cols[2].metric("하락", f"{summary.get('하락', '-')}종목")
-            m_cols[3].metric("보합", f"{summary.get('보합', '-')}종목")
+            m_cols[1].metric("🔴 상승", f"{summary.get('상승', '-')}종목")
+            m_cols[2].metric("🔵 하락", f"{summary.get('하락', '-')}종목")
+            m_cols[3].metric("⚪ 보합", f"{summary.get('보합', '-')}종목")
 
-            if "총거래대금" in summary and summary["총거래대금"] > 0:
-                amt = summary["총거래대금"]
-                amt_str = f"{amt / 1_0000_0000:.1f}억원" if amt >= 1_0000_0000 else f"{amt:,}원"
-                st.info(f"총 거래대금: {amt_str}")
+            if "시가총액합계" in summary and summary["시가총액합계"] > 0:
+                mktcap = summary["시가총액합계"]
+                mktcap_str = f"{mktcap / 1_000_000_000_000:.1f}조원" if mktcap >= 1_000_000_000_000 else f"{mktcap / 100_000_000:.0f}억원"
+                st.info(f"K-OTC 총 시가총액: {mktcap_str}")
         else:
-            st.warning("K-OTC 시장 요약 데이터를 불러오지 못했습니다. K-OTC 사이트 응답을 확인하세요.")
+            st.warning("K-OTC 시장 요약 데이터를 불러오지 못했습니다.")
 
         st.divider()
         st.markdown('<div class="section-header">🔴 상승 / 🔵 하락 TOP</div>', unsafe_allow_html=True)
@@ -323,9 +323,9 @@ elif menu == "🏦 장외거래 (K-OTC)":
         if all_df.empty:
             st.info("전체 종목 데이터를 불러오지 못했습니다.")
         else:
-            show_cols = [c for c in ["종목코드", "종목명", "현재가", "등락률", "거래량", "거래대금", "시가총액"] if c in all_df.columns]
-            st.dataframe(all_df[show_cols].sort_values("등락률", ascending=False) if "등락률" in all_df.columns else all_df[show_cols],
-                         use_container_width=True, hide_index=True)
+            show_cols = [c for c in ["종목코드", "종목명", "현재가", "등락률", "거래량", "시가총액"] if c in all_df.columns]
+            display_df = all_df[show_cols].sort_values("등락률", ascending=False) if "등락률" in all_df.columns else all_df[show_cols]
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     with tab2:
         st.markdown("#### 🔍 K-OTC 종목 검색")
@@ -336,7 +336,7 @@ elif menu == "🏦 장외거래 (K-OTC)":
             if result_df.empty:
                 st.warning(f"'{keyword}' 검색 결과가 없습니다.")
             else:
-                show_cols = [c for c in ["종목코드", "종목명", "현재가", "등락률", "거래량", "거래대금"] if c in result_df.columns]
+                show_cols = [c for c in ["종목코드", "종목명", "현재가", "등락률", "거래량", "시가총액"] if c in result_df.columns]
                 st.dataframe(result_df[show_cols], use_container_width=True, hide_index=True)
 
     with tab3:
