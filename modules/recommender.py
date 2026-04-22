@@ -237,13 +237,13 @@ def get_kr_recommendations(tickers: list, names: dict) -> pd.DataFrame:
     results = []
     start = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
 
-    for ticker in tickers[:15]:
+    for ticker in tickers[:30]:
         try:
             df = fdr.DataReader(ticker, start)
             if df.empty or len(df) < 30:
                 continue
             signals = compute_signals(df)
-            if signals and signals["점수"] >= 4:
+            if signals and signals["점수"] >= 3:
                 signals["종목명"] = names.get(ticker, ticker)
                 signals["티커"] = ticker
                 results.append(signals)

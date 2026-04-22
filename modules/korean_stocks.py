@@ -13,8 +13,7 @@ def _scrape_naver_sise(page_name: str, sosok: str, top_n: int) -> pd.DataFrame:
     rows = []
     for page in range(1, 6):  # 최대 5페이지까지
         r = requests.get(url, headers=NAVER_HEADERS, params={"sosok": sosok, "page": page}, timeout=10)
-        r.encoding = "euc-kr"
-        soup = BeautifulSoup(r.text, "lxml")
+        soup = BeautifulSoup(r.content, "lxml", from_encoding="euc-kr")
         for row in soup.select("table.type_2 tr"):
             cols = row.find_all("td")
             if len(cols) < 9:
