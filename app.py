@@ -9,6 +9,7 @@ from modules.korean_stocks import get_market_movers, get_stock_detail, get_ticke
 from modules.us_stocks import get_us_movers, get_stock_history
 from modules.recommender import get_kr_recommendations, get_us_recommendations, compute_signals
 from modules.news_fetcher import fetch_news
+from modules.otc_stocks import get_kotc_movers, get_kotc_listings, get_kotc_stock_history, search_kotc_stock, get_kotc_summary
 
 st.set_page_config(
     page_title="글로벌 주식 대시보드",
@@ -42,7 +43,7 @@ with st.sidebar:
 
     menu = st.radio(
         "메뉴",
-        ["🏠 홈 / 시장 요약", "🇰🇷 한국 주식", "🇺🇸 미국 주식", "💡 매매 추천", "📰 주요 뉴스"],
+        ["🏠 홈 / 시장 요약", "🇰🇷 한국 주식", "🇺🇸 미국 주식", "🏦 장외거래 (K-OTC)", "💡 매매 추천", "📰 주요 뉴스"],
         label_visibility="collapsed",
     )
 
@@ -85,6 +86,22 @@ def load_kr_recommendations(tickers: tuple, names: tuple):
 @st.cache_data(ttl=1800)
 def load_us_recommendations(watch: tuple):
     return get_us_recommendations(list(watch))
+
+@st.cache_data(ttl=600)
+def load_kotc_movers(n):
+    return get_kotc_movers(n)
+
+@st.cache_data(ttl=600)
+def load_kotc_listings():
+    return get_kotc_listings()
+
+@st.cache_data(ttl=600)
+def load_kotc_history(code, days):
+    return get_kotc_stock_history(code, days)
+
+@st.cache_data(ttl=600)
+def load_kotc_summary():
+    return get_kotc_summary()
 
 
 def render_movers_table(gainers: pd.DataFrame, losers: pd.DataFrame, col_price="종가", col_change="등락률"):
@@ -258,6 +275,100 @@ elif menu == "🇺🇸 미국 주식":
                     col3.metric("현재가", f"${sig['현재가']:.2f}")
                     col4.metric("20일 이평선", f"${sig['20일선']:.2f}")
                     st.info(f"근거: {sig['이유']}")
+
+
+# ══════════════════════════════════════════════════════════
+# 장외거래 (K-OTC)
+# ══════════════════════════════════════════════════════════
+elif menu == "🏦 장외거래 (K-OTC)":
+    st.title("🏦 K-OTC 장외주식 시장")
+    st.caption("금융투자협회(KOFIA) K-OTC 비상장주식 거래 현황")
+
+    tab1, tab2, tab3 = st.tabs(["📊 시장 현황", "🔍 종목 검색", "📈 종목 차트"])
+
+    with tab1:
+        st.markdown('<div class="section-header">📊 K-OTC 시장 요약</div>', unsafe_allow_html=True)
+
+        with st.spinner("K-OTC 데이터 로딩 중..."):
+            summary = load_kotc_summary()
+            kotc_g, kotc_l = load_kotc_movers(top_n)
+
+        if summary:
+            m_cols = st.columns(4)
+            m_cols[0].metric("전체 종목수", f"{summary.get('종목수', '-')}개")
+            m_cols[1].metric("상승", f"{summary.get('상승', '-')}종목", delta=str(summary.get('상승', '')))
+            m_cols[2].metric("하락", f"{summary.get('하락', '-')}종목")
+            m_cols[3].metric("보합", f"{summary.get('보합', '-')}종목")
+
+            if "총거래대금" in summary and summary["총거래대금"] > 0:
+                amt = summary["총거래대금"]
+                amt_str = f"{amt / 1_0000_0000:.1f}억원" if amt >= 1_0000_0000 else f"{amt:,}원"
+                st.info(f"총 거래대금: {amt_str}")
+        else:
+            st.warning("K-OTC 시장 요약 데이터를 불러오지 못했습니다. K-OTC 사이트 응답을 확인하세요.")
+
+        st.divider()
+        st.markdown('<div class="section-header">🔴 상승 / 🔵 하락 TOP</div>', unsafe_allow_html=True)
+
+        if kotc_g.empty and kotc_l.empty:
+            st.error("K-OTC 데이터를 불러오지 못했습니다. 장 마감 후이거나 API 응답 구조가 변경되었을 수 있습니다.")
+            st.markdown("직접 확인: [K-OTC 공식 홈페이지](https://www.k-otc.or.kr)")
+        else:
+            render_movers_table(kotc_g, kotc_l, col_price="현재가", col_change="등락률")
+
+        st.divider()
+        st.markdown('<div class="section-header">📋 전체 종목 목록</div>', unsafe_allow_html=True)
+        with st.spinner("전체 종목 불러오는 중..."):
+            all_df = load_kotc_listings()
+        if all_df.empty:
+            st.info("전체 종목 데이터를 불러오지 못했습니다.")
+        else:
+            show_cols = [c for c in ["종목코드", "종목명", "현재가", "등락률", "거래량", "거래대금", "시가총액"] if c in all_df.columns]
+            st.dataframe(all_df[show_cols].sort_values("등락률", ascending=False) if "등락률" in all_df.columns else all_df[show_cols],
+                         use_container_width=True, hide_index=True)
+
+    with tab2:
+        st.markdown("#### 🔍 K-OTC 종목 검색")
+        keyword = st.text_input("종목명 또는 종목코드 입력", placeholder="예: 카카오, 003240")
+        if keyword:
+            with st.spinner("검색 중..."):
+                result_df = search_kotc_stock(keyword)
+            if result_df.empty:
+                st.warning(f"'{keyword}' 검색 결과가 없습니다.")
+            else:
+                show_cols = [c for c in ["종목코드", "종목명", "현재가", "등락률", "거래량", "거래대금"] if c in result_df.columns]
+                st.dataframe(result_df[show_cols], use_container_width=True, hide_index=True)
+
+    with tab3:
+        st.markdown("#### 📈 K-OTC 종목 차트")
+        c1, c2 = st.columns([3, 1])
+        otc_code = c1.text_input("종목코드 입력 (K-OTC)", placeholder="예: KQ1234567")
+        otc_period_map = {"1개월": 30, "3개월": 90, "6개월": 180, "1년": 365}
+        otc_period_label = c2.selectbox("기간", list(otc_period_map.keys()), index=1, key="otc_period")
+
+        if otc_code:
+            with st.spinner("차트 로딩 중..."):
+                otc_df = load_kotc_history(otc_code, otc_period_map[otc_period_label])
+            if otc_df.empty:
+                st.warning("해당 종목의 차트 데이터를 불러오지 못했습니다. 종목코드를 확인하세요.")
+            else:
+                render_candlestick(otc_df, f"K-OTC {otc_code} 캔들차트")
+                if len(otc_df) >= 20:
+                    sig = compute_signals(otc_df)
+                    if sig:
+                        st.markdown("**기술적 분석 신호**")
+                        col1, col2, col3, col4 = st.columns(4)
+                        col1.metric("매매 신호", sig["신호"])
+                        col2.metric("RSI", sig["RSI"])
+                        col3.metric("현재가", f"{sig['현재가']:,}")
+                        col4.metric("20일 이평선", f"{sig['20일선']:,}")
+                        st.info(f"근거: {sig['이유']}")
+
+    st.divider()
+    st.markdown("""
+    > ℹ️ **K-OTC란?** 금융투자협회가 운영하는 장외주식 거래 플랫폼으로, KOSPI·KOSDAQ에 상장되지 않은 비상장 주식을 거래할 수 있습니다.
+    > 비상장 주식 특성상 유동성이 낮고 가격 변동성이 높을 수 있습니다. 투자에 유의하세요.
+    """)
 
 
 # ══════════════════════════════════════════════════════════
