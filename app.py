@@ -80,7 +80,7 @@ def load_kr_chart(ticker, days):
 def load_us_chart(ticker, period):
     return get_stock_history(ticker, period)
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=300)
 def load_kr_recommendations(tickers: tuple, names: tuple):
     return get_kr_recommendations(list(tickers), dict(names))
 

@@ -7,13 +7,14 @@ from datetime import datetime, timedelta
 NAVER_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 
-def _scrape_naver_sise(page_name: str, top_n: int) -> pd.DataFrame:
+def _scrape_naver_sise(page_name: str, sosok: str, top_n: int) -> pd.DataFrame:
     """네이버 금융 시세 페이지(sise_rise/sise_fall 등) HTML 파싱"""
-    url = f"https://finance.naver.com/sise/{page_name}.naver"
+    url = f"https://finance.naver.com/sise/{page_name}"
     rows = []
     for page in range(1, 6):  # 최대 5페이지까지
-        r = requests.get(url, headers=NAVER_HEADERS, params={"page": page}, timeout=10)
-        soup = BeautifulSoup(r.content, "lxml")
+        r = requests.get(url, headers=NAVER_HEADERS, params={"sosok": sosok, "page": page}, timeout=10)
+        r.encoding = "euc-kr"
+        soup = BeautifulSoup(r.text, "lxml")
         for row in soup.select("table.type_2 tr"):
             cols = row.find_all("td")
             if len(cols) < 9:
@@ -41,8 +42,8 @@ def get_market_movers(market: str = "KOSPI", top_n: int = 10):
     """KOSPI/KOSDAQ 상승/하락 상위 종목 (네이버 금융 스크래핑)"""
     sosok = "0" if market == "KOSPI" else "1"
     try:
-        gainers = _scrape_naver_sise(f"sise_rise.naver?sosok={sosok}&", top_n)
-        losers  = _scrape_naver_sise(f"sise_fall.naver?sosok={sosok}&", top_n)
+        gainers = _scrape_naver_sise("sise_rise.naver", sosok, top_n)
+        losers  = _scrape_naver_sise("sise_fall.naver", sosok, top_n)
         return gainers, losers
     except Exception:
         return pd.DataFrame(), pd.DataFrame()
