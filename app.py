@@ -463,6 +463,17 @@ elif menu == "💡 매매 추천":
 
     tab1, tab2 = st.tabs(["🇰🇷 한국 추천", "🇺🇸 미국 추천"])
 
+    # KOSPI 주요 종목 폴백 리스트 (fdr.StockListing 실패 시 사용)
+    KOSPI_FALLBACK = {
+        "005930": "삼성전자", "000660": "SK하이닉스", "005380": "현대차",
+        "035420": "NAVER", "000270": "기아", "051910": "LG화학",
+        "006400": "삼성SDI", "035720": "카카오", "068270": "셀트리온",
+        "028260": "삼성물산", "012330": "현대모비스", "055550": "신한지주",
+        "105560": "KB금융", "096770": "SK이노베이션", "003550": "LG",
+        "015760": "한국전력", "086790": "하나금융지주", "032830": "삼성생명",
+        "018260": "삼성에스디에스", "009150": "삼성전기",
+    }
+
     with tab1:
         with st.spinner("한국 주식 분석 중... (캐시 없을 시 30~60초 소요)"):
             try:
@@ -471,13 +482,17 @@ elif menu == "💡 매매 추천":
                 top_rows = listing.nlargest(20, "Volume")
                 top_tickers = tuple(top_rows["Code"].tolist())
                 names_tuple = tuple(zip(top_rows["Code"], top_rows["Name"]))
+            except Exception:
+                top_tickers = tuple(KOSPI_FALLBACK.keys())
+                names_tuple = tuple(KOSPI_FALLBACK.items())
+            try:
                 rec_df = load_kr_recommendations(top_tickers, names_tuple)
                 if rec_df.empty:
                     st.info("현재 매수 추천 기준을 충족하는 종목이 없습니다.")
                 else:
                     st.dataframe(rec_df, use_container_width=True, hide_index=True)
             except Exception as e:
-                st.error(f"데이터 로딩 오류: {e}")
+                st.error(f"분석 오류: {e}")
 
     with tab2:
         with st.spinner("미국 주식 분석 중... (캐시 없을 시 20~30초 소요)"):
