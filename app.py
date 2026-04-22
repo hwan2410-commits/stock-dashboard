@@ -9,7 +9,8 @@ from modules.korean_stocks import get_market_movers, get_stock_detail, get_ticke
 from modules.us_stocks import get_us_movers, get_stock_history
 from modules.recommender import get_kr_recommendations, get_us_recommendations, compute_signals
 from modules.news_fetcher import fetch_news
-from modules.otc_stocks import get_kotc_movers, get_kotc_listings, get_kotc_stock_history, search_kotc_stock, get_kotc_summary  # noqa: F401
+from modules.otc_stocks import get_kotc_movers, get_kotc_listings, get_kotc_stock_history, search_kotc_stock, get_kotc_summary
+from modules.afterhours import get_kr_afterhours, get_us_afterhours
 
 st.set_page_config(
     page_title="글로벌 주식 대시보드",
@@ -43,7 +44,7 @@ with st.sidebar:
 
     menu = st.radio(
         "메뉴",
-        ["🏠 홈 / 시장 요약", "🇰🇷 한국 주식", "🇺🇸 미국 주식", "🏦 장외거래 (K-OTC)", "💡 매매 추천", "📰 주요 뉴스"],
+        ["🏠 홈 / 시장 요약", "🇰🇷 한국 주식", "🇺🇸 미국 주식", "🏦 장외/시간외 거래", "💡 매매 추천", "📰 주요 뉴스"],
         label_visibility="collapsed",
     )
 
@@ -102,6 +103,14 @@ def load_kotc_history(short_cd, days):
 @st.cache_data(ttl=600)
 def load_kotc_summary():
     return get_kotc_summary()
+
+@st.cache_data(ttl=120)
+def load_kr_afterhours(n):
+    return get_kr_afterhours(n)
+
+@st.cache_data(ttl=120)
+def load_us_afterhours(n):
+    return get_us_afterhours(n)
 
 
 def render_movers_table(gainers: pd.DataFrame, losers: pd.DataFrame, col_price="종가", col_change="등락률"):
@@ -278,15 +287,89 @@ elif menu == "🇺🇸 미국 주식":
 
 
 # ══════════════════════════════════════════════════════════
-# 장외거래 (K-OTC)
+# 장외 / 시간외 거래
 # ══════════════════════════════════════════════════════════
-elif menu == "🏦 장외거래 (K-OTC)":
-    st.title("🏦 K-OTC 장외주식 시장")
-    st.caption("금융투자협회(KOFIA) K-OTC 비상장주식 거래 현황")
+elif menu == "🏦 장외/시간외 거래":
+    st.title("🏦 장외/시간외 거래")
 
-    tab1, tab2, tab3 = st.tabs(["📊 시장 현황", "🔍 종목 검색", "📈 종목 차트"])
+    tab_ah_kr, tab_ah_us, tab_kotc1, tab_kotc2, tab_kotc3 = st.tabs([
+        "⏰ 시간외 한국", "🌙 시간외 미국", "📊 K-OTC 현황", "🔍 K-OTC 검색", "📈 K-OTC 차트"
+    ])
 
-    with tab1:
+    # ── 시간외 한국 ────────────────────────────────────────
+    with tab_ah_kr:
+        st.markdown("#### ⏰ 한국 주식 시간외 단일가")
+        st.caption("KOSPI·KOSDAQ 시가총액 상위 100개 종목 기준 / 장전(08:00~09:00) · 장후(15:30~18:00) 시간외 단일가 체결 현황")
+        with st.spinner("시간외 데이터 로딩 중..."):
+            kr_vol, kr_rate, session_type = load_kr_afterhours(top_n)
+
+        session_label = "🌅 장전 시간외" if session_type == "PRE_MARKET" else "🌆 장후 시간외"
+        st.info(f"현재 세션: **{session_label}** | 한국 시간외 단일가는 당일 종가로 체결되므로 별도 가격 변동이 없습니다.")
+
+        if kr_vol.empty:
+            st.warning("시간외 거래량 데이터가 없습니다. 정규장 시간 중이거나 시간외 거래가 없을 수 있습니다.")
+        else:
+            st.markdown("#### 📊 시간외 거래량 TOP")
+            st.dataframe(kr_vol, use_container_width=True, hide_index=True)
+
+        st.divider()
+
+        if not kr_rate.empty:
+            st.markdown("#### 📈 시간외 거래 종목 중 정규장 등락률 상위")
+            st.dataframe(kr_rate, use_container_width=True, hide_index=True)
+
+        st.divider()
+        st.markdown("""
+        **한국 시간외 거래 안내**
+        | 구분 | 시간 | 방식 |
+        |------|------|------|
+        | 장전 시간외 | 08:00 ~ 09:00 | 전일 종가 기준 단일가 |
+        | 장후 시간외 | 15:30 ~ 18:00 | 당일 종가 기준 단일가 |
+
+        > ⚠️ 한국 시간외 단일가 거래는 **종가가 고정**되어 있어 가격 변동이 없습니다. 시간외에 얼마나 활발히 거래됐는지(거래량)가 핵심 지표입니다.
+        """)
+
+    # ── 시간외 미국 ────────────────────────────────────────
+    with tab_ah_us:
+        st.markdown("#### 🌙 미국 주식 시간외 시세")
+        st.caption("프리마켓(4:00~9:30 ET) · 애프터마켓(16:00~20:00 ET) 기준 정규장 종가 대비 변화")
+        with st.spinner("미국 시간외 데이터 로딩 중..."):
+            us_df, us_session = load_us_afterhours(top_n)
+
+        st.info(f"현재 세션: **{us_session}**")
+
+        if us_df.empty:
+            st.warning("미국 시간외 데이터를 불러오지 못했습니다.")
+        else:
+            # 상승/하락 분리
+            has_rate = us_df["등락률(%)"].notna()
+            us_g = us_df[has_rate & (us_df["등락률(%)"] >= 0)].head(top_n)
+            us_l = us_df[has_rate & (us_df["등락률(%)"] < 0)].sort_values("등락률(%)").head(top_n)
+
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("#### 🔴 시간외 상승")
+                st.dataframe(us_g, use_container_width=True, hide_index=True)
+            with c2:
+                st.markdown("#### 🔵 시간외 하락")
+                st.dataframe(us_l, use_container_width=True, hide_index=True)
+
+            st.divider()
+            st.markdown("#### 전체 종목 시간외 시세")
+            st.dataframe(us_df, use_container_width=True, hide_index=True)
+
+        st.divider()
+        st.markdown("""
+        **미국 시간외 거래 안내**
+        | 구분 | 시간 (ET) | 한국시간 (KST) |
+        |------|-----------|----------------|
+        | 프리마켓 | 04:00 ~ 09:30 | 17:00 ~ 22:30 |
+        | 정규장 | 09:30 ~ 16:00 | 22:30 ~ 05:00+1 |
+        | 애프터마켓 | 16:00 ~ 20:00 | 05:00 ~ 09:00+1 |
+        """)
+
+    # ── K-OTC 시장 현황 ───────────────────────────────────
+    with tab_kotc1:
         st.markdown('<div class="section-header">📊 K-OTC 시장 요약</div>', unsafe_allow_html=True)
 
         with st.spinner("K-OTC 데이터 로딩 중..."):
@@ -327,7 +410,7 @@ elif menu == "🏦 장외거래 (K-OTC)":
             display_df = all_df[show_cols].sort_values("등락률", ascending=False) if "등락률" in all_df.columns else all_df[show_cols]
             st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-    with tab2:
+    with tab_kotc2:
         st.markdown("#### 🔍 K-OTC 종목 검색")
         keyword = st.text_input("종목명 또는 종목코드 입력", placeholder="예: 카카오, 003240")
         if keyword:
@@ -339,7 +422,7 @@ elif menu == "🏦 장외거래 (K-OTC)":
                 show_cols = [c for c in ["종목코드", "종목명", "현재가", "등락률", "거래량", "시가총액"] if c in result_df.columns]
                 st.dataframe(result_df[show_cols], use_container_width=True, hide_index=True)
 
-    with tab3:
+    with tab_kotc3:
         st.markdown("#### 📈 K-OTC 종목 차트")
         c1, c2 = st.columns([3, 1])
         otc_code = c1.text_input("종목코드 입력 (K-OTC)", placeholder="예: KQ1234567")
