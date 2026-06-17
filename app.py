@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 import yfinance as yf
 import FinanceDataReader as fdr
 from modules.korean_stocks import get_market_movers, get_stock_detail, get_ticker_name
-from modules.us_stocks import get_us_movers, get_stock_history
+from modules.us_stocks import get_us_movers, get_stock_history, TICKER_NAMES
 from modules.recommender import get_kr_recommendations, get_us_recommendations, compute_signals
 from modules.news_fetcher import fetch_news
 from modules.otc_stocks import get_kotc_movers, get_kotc_listings, get_kotc_stock_history, search_kotc_stock, get_kotc_summary
@@ -111,6 +111,18 @@ def load_kr_afterhours(n):
 @st.cache_data(ttl=120)
 def load_us_afterhours(n):
     return get_us_afterhours(n)
+
+@st.cache_data(ttl=86400)
+def load_krx_all_stocks():
+    try:
+        df = fdr.StockListing('KRX')
+        name_col = next((c for c in ["Name", "종목명", "name"] if c in df.columns), None)
+        code_col = next((c for c in ["Code", "종목코드", "code"] if c in df.columns), None)
+        if name_col and code_col:
+            return {str(row[code_col]).zfill(6): row[name_col] for _, row in df.iterrows()}
+    except Exception:
+        pass
+    return {}
 
 
 def render_movers_table(gainers: pd.DataFrame, losers: pd.DataFrame, col_price="종가", col_change="등락률"):
@@ -461,7 +473,7 @@ elif menu == "💡 매매 추천":
     st.title("💡 오늘의 매매 추천 종목")
     st.caption("RSI, MACD, 이동평균선 기반 기술적 분석 결과입니다. 투자 판단의 참고 자료로만 활용하세요.")
 
-    tab1, tab2 = st.tabs(["🇰🇷 한국 추천", "🇺🇸 미국 추천"])
+    tab1, tab2, tab3 = st.tabs(["🇰🇷 한국 추천", "🇺🇸 미국 추천", "🔍 종목 검색"])
 
     # KOSPI + KOSDAQ 주요 종목 고정 목록 (100개)
     KR_WATCHLIST = {
@@ -531,6 +543,87 @@ elif menu == "💡 매매 추천":
                 st.info("현재 매수 추천 기준을 충족하는 종목이 없습니다.")
             else:
                 st.dataframe(rec_us, use_container_width=True, hide_index=True)
+
+    with tab3:
+        st.markdown("#### 🔍 종목 검색 & 분석")
+        st.caption("종목명 또는 코드/티커를 입력하면 자동완성 목록이 표시됩니다.")
+
+        with st.spinner("종목 목록 로딩 중..."):
+            krx_all = load_krx_all_stocks()
+
+        # 전체 검색 풀 구성: [(표시라벨, ticker, 시장)]
+        search_pool = []
+        for code, name in krx_all.items():
+            search_pool.append((f"🇰🇷 {name} ({code})", code, "KR"))
+        for ticker, name in TICKER_NAMES.items():
+            search_pool.append((f"🇺🇸 {name} ({ticker})", ticker, "US"))
+
+        query = st.text_input("종목명 / 코드 / 티커 검색", placeholder="삼성, AAPL, 005930...")
+
+        selected_ticker = None
+        selected_market = None
+        selected_name = None
+
+        if query:
+            q = query.strip().lower()
+            filtered = [item for item in search_pool if q in item[0].lower()]
+
+            if not filtered:
+                st.warning("검색 결과가 없습니다.")
+            else:
+                labels = [item[0] for item in filtered[:60]]
+                chosen = st.selectbox("종목 선택", labels, key="stock_search_select")
+                matched = next((item for item in filtered if item[0] == chosen), None)
+                if matched:
+                    selected_name = matched[0]
+                    selected_ticker = matched[1]
+                    selected_market = matched[2]
+
+        if selected_ticker:
+            if st.button(f"📊 분석 시작", key="analyze_btn"):
+                st.session_state["analyze_target"] = (selected_ticker, selected_market, selected_name)
+
+        target = st.session_state.get("analyze_target")
+        if target and query and selected_ticker == target[0]:
+            ticker_val, market_val, name_val = target
+            with st.spinner("데이터 로딩 및 분석 중..."):
+                try:
+                    if market_val == "KR":
+                        start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+                        search_df = fdr.DataReader(ticker_val, start_date)
+                        price_fmt = lambda v: f"{v:,.0f}원"
+                    else:
+                        search_df = yf.download(ticker_val, period="1y", auto_adjust=True, progress=False)
+                        if isinstance(search_df.columns, pd.MultiIndex):
+                            search_df.columns = search_df.columns.get_level_values(0)
+                        price_fmt = lambda v: f"${v:.2f}"
+
+                    if search_df is None or search_df.empty or len(search_df) < 30:
+                        st.error("데이터를 불러오지 못했습니다. 종목코드/티커를 확인하세요.")
+                    else:
+                        sig = compute_signals(search_df)
+                        if not sig:
+                            st.error("신호 계산에 실패했습니다. 데이터가 부족할 수 있습니다.")
+                        else:
+                            st.markdown(f"### {name_val} 분석 결과")
+                            render_candlestick(search_df, f"{name_val} 캔들차트 (최근 1년)")
+
+                            m1, m2, m3, m4 = st.columns(4)
+                            m1.metric("매매 신호", sig["신호"])
+                            m2.metric("종합 점수", f"{sig['점수']} / 14")
+                            m3.metric("현재가", price_fmt(sig["현재가"]))
+                            m4.metric("20일 이평선", price_fmt(sig["20일선"]))
+
+                            st.divider()
+                            d1, d2, d3, d4 = st.columns(4)
+                            d1.metric("RSI", sig["RSI"])
+                            d2.metric("스토캐스틱", sig["스토캐스틱"])
+                            d3.metric("BB 위치", sig.get("BB위치", "N/A"))
+                            d4.metric("52주 위치", sig.get("52주위치", "N/A"))
+
+                            st.info(f"**분석 근거**: {sig['이유']}")
+                except Exception as e:
+                    st.error(f"오류가 발생했습니다: {e}")
 
     st.divider()
     st.markdown("""
